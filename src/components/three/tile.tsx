@@ -6,8 +6,7 @@ type TileProps = {
     isHovered: boolean
 }
 
-export const Tile = ({x, z, onHover, onClick, isHovered}: TileProps) => {
-
+export const Tile = ({ x, z, onHover, onClick, isHovered }: TileProps) => {
     const onTileHover = (e: PointerEvent) => {
         e.stopPropagation()
         onHover([x, z])
@@ -18,8 +17,10 @@ export const Tile = ({x, z, onHover, onClick, isHovered}: TileProps) => {
         onClick([x, z])
     }
 
-    return <mesh position={[x, 0, z]} onPointerOver={onTileHover} onClick={onTileClick}>
+    return (
+        <mesh position={[x, 0, z]} onPointerOver={onTileHover} onClick={onTileClick}>
             <boxGeometry args={[1, 1, 1]} />
             <meshStandardMaterial color={isHovered ? "red" : "green"} />
         </mesh>
+    )
 }

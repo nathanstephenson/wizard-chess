@@ -5,8 +5,8 @@ type ErrorSerializableResult<T> = Extract<SerializableResult<T>, { status: "erro
 export const Error = (params: ErrorSerializableResult<unknown>) => {
     return (
         <div className="flex flex-col gap-5 w-full h-full items-center justify-center">
-        <h1>{getErrorCode(params)}</h1>
-        <p>{params.message}</p>
+            <h1>{getErrorCode(params)}</h1>
+            <p>{params.message}</p>
         </div>
     )
 }

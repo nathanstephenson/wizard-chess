@@ -1,8 +1,8 @@
 "use client"
 
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { extend, useFrame, useThree } from "@react-three/fiber"
 import { useLayoutEffect, useRef } from "react"
-import { extend, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls"
 
 extend({ OrbitControls })
 
@@ -11,9 +11,9 @@ const Controls = () => {
     const { camera, gl } = useThree()
     useLayoutEffect(() => {
         camera.position.setY(3)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
-    useFrame(() => controls.current !== null ? controls.current.update() : undefined)
+    useFrame(() => (controls.current !== null ? controls.current.update() : undefined))
     return <orbitControls ref={controls} args={[camera, gl.domElement]} enableDamping dampingFactor={0.1} rotateSpeed={0.5} />
 }
 
