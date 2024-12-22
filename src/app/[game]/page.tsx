@@ -7,10 +7,10 @@ type PageProps = {
 }
 
 const Page = async ({ params }: PageProps) => {
-    const awaitedParams = await params
+    const _params = await params
     return (
         <div className="flex w-full h-dvh">
-            <Game id={awaitedParams.game} state={{white: "a", black: "b", turns: []}}/>
+            <Game game={{id: _params.game, white: "a", black: "b", turns: []}}/>
         </div>
     )
 }

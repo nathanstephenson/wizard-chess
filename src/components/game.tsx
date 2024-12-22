@@ -7,8 +7,7 @@ import { useState } from "react"
 import { Tile } from "./three/tile"
 
 type GameProps = {
-    id: string
-    state: GameState
+    game: GameState
 }
 
 const boardSize = 8

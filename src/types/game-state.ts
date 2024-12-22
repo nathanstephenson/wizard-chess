@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const GameStateSchema = z.object({
+    id: z.string(),
     white: z.string().min(1),
     black: z.string().min(1),
     turns: z.array(z.object({
