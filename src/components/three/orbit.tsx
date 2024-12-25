@@ -2,7 +2,7 @@
 
 import { extend, useFrame, useThree } from "@react-three/fiber"
 import { useEffect, useRef } from "react"
-import { Vector3 } from "three"
+import { MathUtils } from "three"
 import { OrbitControls } from "three-stdlib"
 
 extend({ OrbitControls })
@@ -12,17 +12,16 @@ const Controls = () => {
 
     const { camera, gl } = useThree()
 
-    useFrame(() => (controls.current !== null ? controls.current.update() : undefined))
+    useFrame(() => {
+        if (controls.current === null) return
+        controls.current.update()
+    })
 
     useEffect(() => {
-        console.log("looking", camera.getWorldDirection(new Vector3(0, 0, 0)))
-        const rot = camera.getWorldDirection(new Vector3(0, 0, 0))
-        camera.rotateX(-2 * rot.x)
-        camera.rotateY(-2 * rot.y)
-        camera.rotateZ(-2 * rot.z)
-        console.log("looking", camera.getWorldDirection(new Vector3(0, 0, 0)))
-        camera.updateProjectionMatrix()
-    }, [camera])
+        controls.current?.setPolarAngle(Math.PI / 4)
+        controls.current?.setAzimuthalAngle(MathUtils.degToRad(0))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [controls.current])
 
     return (
         <orbitControls
@@ -34,6 +33,8 @@ const Controls = () => {
             rotateSpeed={0.5}
             minPolarAngle={Math.PI / 8}
             maxPolarAngle={Math.PI / 2}
+            minDistance={1}
+            maxDistance={25}
         />
     )
 }
