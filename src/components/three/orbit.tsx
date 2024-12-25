@@ -2,12 +2,14 @@
 
 import { extend, useFrame, useThree } from "@react-three/fiber"
 import { useEffect, useRef } from "react"
-import { MathUtils } from "three"
 import { OrbitControls } from "three-stdlib"
+import { useGame } from "../game"
 
 extend({ OrbitControls })
 
 const Controls = () => {
+    const game = useGame()
+
     const controls = useRef<OrbitControls>(null)
 
     const { camera, gl } = useThree()
@@ -17,10 +19,10 @@ const Controls = () => {
         controls.current.update()
     })
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
-        controls.current?.setPolarAngle(Math.PI / 4)
-        controls.current?.setAzimuthalAngle(MathUtils.degToRad(0))
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (controls.current === null) return
+        game.camera.set(controls.current)
     }, [controls.current])
 
     return (

@@ -2,10 +2,13 @@
 
 import { deserializeResult } from "@nathanstephenson/result-ts"
 import { useMutation } from "@tanstack/react-query"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createContext, useContext } from "react"
+import { MathUtils } from "three"
+import { OrbitControls } from "three-stdlib"
 import { useApi } from "@/hooks/useApi"
 import { GameState } from "../types/game-state"
+import { Overlay } from "./overlay"
 import { RenderGame } from "./render-game"
 
 type GameProps = {
@@ -16,6 +19,10 @@ type GameContext = {
     state: GameState
     tile: {
         onClick: (tile: [number, number]) => void
+    }
+    camera: {
+        set: (camera: OrbitControls | undefined) => void
+        reset: () => void
     }
 }
 
@@ -31,6 +38,15 @@ export const useGame = () => {
 
 const Game = ({ game }: GameProps) => {
     const api = useApi()
+
+    const [camera, setCamera] = useState<OrbitControls>()
+
+    const resetCamera = () => {
+        camera?.setPolarAngle(Math.PI / 4)
+        camera?.setAzimuthalAngle(MathUtils.degToRad(0))
+    }
+
+    useEffect(resetCamera, [camera])
 
     const [moves, setMoves] = useState<GameState["moves"]>(game.moves)
     const addMove = (move: GameState["moves"][number]) => setMoves(moves => [...moves, move])
@@ -53,12 +69,17 @@ const Game = ({ game }: GameProps) => {
 
     const ctx = {
         state: { ...game, moves },
-        tile: { onClick }
+        tile: { onClick },
+        camera: {
+            set: setCamera,
+            reset: resetCamera
+        }
     }
 
     return (
         <GameContext.Provider value={ctx}>
             <div className="w-full h-full flex flex-row">
+                <Overlay />
                 <RenderGame />
             </div>
         </GameContext.Provider>
