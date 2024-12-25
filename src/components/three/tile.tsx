@@ -35,7 +35,7 @@ export const Tile = ({ x, z }: TileProps) => {
     const offset = -game.state.boardSize / 2 + (game.state.boardSize % 2 === 0 ? 0.5 : 0)
 
     return (
-        <mesh position={[offset + x, -1, offset + z]} onPointerOver={onOver} onPointerOut={onOut} onClick={onClick}>
+        <mesh position={[offset + x, -1, -offset - z]} onPointerOver={onOver} onPointerOut={onOut} onClick={onClick}>
             <boxGeometry args={[1, 1, 1]} />
             <meshStandardMaterial color={isHovered ? "red" : "green"} />
         </mesh>
