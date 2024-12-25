@@ -1,49 +1,67 @@
 "use client"
 
-import { Canvas } from "@react-three/fiber"
+import { deserializeResult } from "@nathanstephenson/result-ts"
 import { useMutation } from "@tanstack/react-query"
 import { useState } from "react"
+import { createContext, useContext } from "react"
 import { useApi } from "@/hooks/useApi"
 import { GameState } from "../types/game-state"
-import { OrbitControls } from "./three/orbit"
-import { Tile } from "./three/tile"
+import { RenderGame } from "./render-game"
 
 type GameProps = {
     game: GameState
 }
 
-const boardSize = 8
+type GameContext = {
+    state: GameState
+    tile: {
+        onClick: (tile: [number, number]) => void
+    }
+}
+
+const GameContext = createContext<GameContext | undefined>(undefined)
+
+export const useGame = () => {
+    const game = useContext(GameContext)
+    if (game === undefined) {
+        throw new Error("Couldn't find game from context")
+    }
+    return game
+}
 
 const Game = ({ game }: GameProps) => {
     const api = useApi()
 
-    const [hoveredTile, setHoveredTile] = useState<[number, number] | undefined>(undefined)
+    const [moves, setMoves] = useState<GameState["moves"]>(game.moves)
+    const addMove = (move: GameState["moves"][number]) => setMoves(moves => [...moves, move])
+    const translatedMoves = moves.map(move => String.fromCharCode(97 + move.x) + (move.z + 1))
+    console.log("translatedMoves", translatedMoves)
 
-    const onHover = (tile: [number, number]) => setHoveredTile(() => tile)
     const onClick = (tile: [number, number]) => {
         moveMutation.mutate({ piece: "pawn", x: tile[0], z: tile[1] })
-        console.log(tile)
     }
 
     const moveMutation = useMutation({
         mutationFn: async (params: { piece: string; x: number; z: number }) => await api.game.move({ id: game.id, ...params }),
         onSettled: res => {
             console.log("move settled", res)
-            return res
+            if (res === undefined) return
+            const result = deserializeResult(res)
+            return result.map(addMove).flatMap(() => result)
         }
     })
 
+    const ctx = {
+        state: { ...game, moves },
+        tile: { onClick }
+    }
+
     return (
-        <Canvas>
-            <OrbitControls />
-            <ambientLight intensity={0.5} />
-            <directionalLight intensity={10} position={[Math.floor(boardSize / 2), 10, Math.floor(boardSize / 2)]} rotateX={45} />
-            {Array.from({ length: boardSize }, (_, x) =>
-                Array.from({ length: boardSize }, (_, z) => (
-                    <Tile key={`${x}-${z}`} x={x} z={z} onHover={onHover} onClick={onClick} isHovered={hoveredTile?.at(0) === x && hoveredTile?.at(1) === z} />
-                ))
-            )}
-        </Canvas>
+        <GameContext.Provider value={ctx}>
+            <div className="w-full h-full flex flex-row">
+                <RenderGame />
+            </div>
+        </GameContext.Provider>
     )
 }
 
