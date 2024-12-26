@@ -13,10 +13,6 @@ export const RenderGame = () => {
             <ambientLight intensity={0.5} />
             <directionalLight intensity={10} position={[Math.floor(game.state.boardSize / 2), 10, Math.floor(game.state.boardSize / 2)]} />
             <Tiles />
-            <mesh position={[0, 0, 0]}>
-                <boxGeometry args={[0.5, 0.5, 0.5]} />
-                <meshStandardMaterial color="blue" />
-            </mesh>
             <OrbitControls />
         </Canvas>
     )
@@ -29,3 +25,11 @@ const Tiles = () => {
 
     return Array.from({ length: boardSize }, (_, x) => Array.from({ length: boardSize }, (_, z) => <Tile key={`${x}-${z}`} x={x} z={z} />))
 }
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const OriginBlock = () => (
+    <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[0.5, 0.5, 0.5]} />
+        <meshStandardMaterial color="blue" />
+    </mesh>
+)

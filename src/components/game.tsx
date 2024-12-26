@@ -6,7 +6,9 @@ import { useEffect, useState } from "react"
 import { createContext, useContext } from "react"
 import { MathUtils } from "three"
 import { OrbitControls } from "three-stdlib"
+import { generateInitialPieces, getLatestPieceState, isValidMove } from "@/common/pieces"
 import { useApi } from "@/hooks/useApi"
+import { Piece } from "@/types/piece"
 import { GameState } from "../types/game-state"
 import { Overlay } from "./overlay"
 import { RenderGame } from "./render-game"
@@ -17,7 +19,9 @@ type GameProps = {
 
 type GameContext = {
     state: GameState
+    pieces: Piece[]
     tile: {
+        selected: Piece | undefined
         onClick: (tile: [number, number]) => void
     }
     camera: {
@@ -48,17 +52,37 @@ const Game = ({ game }: GameProps) => {
 
     useEffect(resetCamera, [camera])
 
-    const [moves, setMoves] = useState<GameState["moves"]>(game.moves)
-    const addMove = (move: GameState["moves"][number]) => setMoves(moves => [...moves, move])
-    const translatedMoves = moves.map(move => String.fromCharCode(97 + move.x) + (move.z + 1))
+    const initialPieces = generateInitialPieces(game.boardSize)
+    const [moves, setMoves] = useState<GameState["history"]>(game.history)
+    const currentState = getLatestPieceState(initialPieces, moves)
+
+    const [selected, setSelected] = useState<Piece>()
+    console.log("selected", selected)
+
+    const addMove = (move: Piece) => setMoves(moves => [...moves, move])
+    const translatedMoves = moves.map(move => move.piece + String.fromCharCode(97 + move.x) + (move.z + 1))
     console.log("translatedMoves", translatedMoves)
 
     const onClick = (tile: [number, number]) => {
-        moveMutation.mutate({ piece: "pawn", x: tile[0], z: tile[1] })
+        if (selected !== undefined) {
+            const validMove = isValidMove(tile[0], tile[1], selected, currentState)
+            if (validMove) {
+                moveMutation.mutate({ ...selected, x: tile[0], z: tile[1], took: typeof validMove === "boolean" ? undefined : validMove })
+            }
+            setSelected(undefined)
+            return
+        }
+        const piece = currentState.find(piece => piece.x === tile[0] && piece.z === tile[1])
+        if (piece === undefined) {
+            setSelected(undefined)
+            return
+        }
+        setSelected(piece)
+        return
     }
 
     const moveMutation = useMutation({
-        mutationFn: async (params: { piece: string; x: number; z: number }) => await api.game.move({ id: game.id, ...params }),
+        mutationFn: async (piece: GameState["history"][number]) => await api.game.move({ gameId: game.id, ...piece }),
         onSettled: res => {
             console.log("move settled", res)
             if (res === undefined) return
@@ -69,7 +93,8 @@ const Game = ({ game }: GameProps) => {
 
     const ctx = {
         state: { ...game, moves },
-        tile: { onClick },
+        pieces: currentState,
+        tile: { selected, onClick },
         camera: {
             set: setCamera,
             reset: resetCamera
