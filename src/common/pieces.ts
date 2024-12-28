@@ -16,14 +16,13 @@ const colour = {
     black: "black"
 } as const
 
-//generate for 8x8 board, then adjust for larger
 export const generateInitialPieces = (boardSize: number) => {
+    //adjust for larger boards
     const pieces: Piece[] = defaultPieces.map(piece => ({
         ...piece,
         x: piece.x + Math.floor((boardSize - DEFAULT_BOARD_SIZE) / 2),
         z: piece.z + (piece.colour === colour.white ? 0 : Math.floor(boardSize - DEFAULT_BOARD_SIZE))
     }))
-
     return pieces
 }
 
@@ -44,6 +43,40 @@ export const getLatestPieceState = (pieces: Piece[], moves: GameState["history"]
         })
         .filter(p => p !== undefined)
 
+const isBlockedDiagonal = (destination: { x: number; z: number }, piece: Piece, pieces: Piece[]) => {
+    let hasReachedEnemy = false
+    const xDiff = destination.x - piece.x
+    const zDiff = destination.z - piece.z
+    const xDir = xDiff > 0 ? 1 : -1
+    const zDir = zDiff > 0 ? 1 : -1
+    const xSteps = Math.abs(xDiff)
+    const zSteps = Math.abs(zDiff)
+    const steps = Math.max(xSteps, zSteps)
+    for (let i = 1; i < steps; i++) {
+        const blockingPiece = pieces.find(p => p.x === piece.x + i * xDir && p.z === piece.z + i * zDir)
+        if (blockingPiece !== undefined && (hasReachedEnemy || blockingPiece.colour === piece.colour)) return true
+        if (blockingPiece !== undefined && blockingPiece.colour !== piece.colour) hasReachedEnemy = true
+    }
+    return false
+}
+
+const isBlockedStraight = (destination: { x: number; z: number }, piece: Piece, pieces: Piece[]) => {
+    let hasReachedEnemy = false
+    const xDiff = destination.x - piece.x
+    const zDiff = destination.z - piece.z
+    const xDir = xDiff > 0 ? 1 : -1
+    const zDir = zDiff > 0 ? 1 : -1
+    const xSteps = Math.abs(xDiff)
+    const zSteps = Math.abs(zDiff)
+    const steps = Math.max(xSteps, zSteps)
+    for (let i = 1; i < steps; i++) {
+        const blockingPiece = pieces.find(p => (xDir > zDir ? p.x === piece.x + i * xDir && p.z === piece.z : p.x === piece.x + i * xDir && p.z === piece.z))
+        if (blockingPiece !== undefined && (hasReachedEnemy || blockingPiece.colour === piece.colour)) return true
+        if (blockingPiece !== undefined && blockingPiece.colour !== piece.colour) hasReachedEnemy = true
+    }
+    return false
+}
+
 const isValidPawnMove = (x: number, z: number, piece: Piece, pieces: Piece[]) => {
     const maxDistance = piece.moveCount === 0 ? 2 : 1
     const blockingPiece = pieces.find(p => p.x === x && p.z === z)
@@ -60,7 +93,7 @@ const isValidPawnMove = (x: number, z: number, piece: Piece, pieces: Piece[]) =>
 const isValidRookMove = (x: number, z: number, piece: Piece, pieces: Piece[]) => {
     const blockingPiece = pieces.find(p => p.x === x && p.z === z)
     const isTaking = blockingPiece !== undefined && blockingPiece.colour !== piece.colour
-    const isBlocked = !isTaking && blockingPiece !== undefined
+    const isBlocked = !isTaking && (blockingPiece !== undefined || isBlockedStraight({ x, z }, piece, pieces))
     if ((Math.abs(piece.x - x) > 0 && Math.abs(piece.z - z) > 0) || isBlocked) return false
     if (isTaking) return blockingPiece
     return true
@@ -81,7 +114,7 @@ const isValidKnightMove = (x: number, z: number, piece: Piece, pieces: Piece[]) 
 const isValidBishopMove = (x: number, z: number, piece: Piece, pieces: Piece[]) => {
     const blockingPiece = pieces.find(p => p.x === x && p.z === z)
     const isTaking = blockingPiece !== undefined && blockingPiece.colour !== piece.colour
-    const isBlocked = !isTaking && blockingPiece !== undefined
+    const isBlocked = !isTaking && (blockingPiece !== undefined || isBlockedDiagonal({ x, z }, piece, pieces))
     if (Math.abs(Math.abs(piece.x - x) - Math.abs(piece.z - z)) !== 0 || isBlocked) return false
     if (isTaking) return blockingPiece
     return true
@@ -90,7 +123,7 @@ const isValidBishopMove = (x: number, z: number, piece: Piece, pieces: Piece[]) 
 const isValidQueenMove = (x: number, z: number, piece: Piece, pieces: Piece[]) => {
     const blockingPiece = pieces.find(p => p.x === x && p.z === z)
     const isTaking = blockingPiece !== undefined && blockingPiece.colour !== piece.colour
-    const isBlocked = !isTaking && blockingPiece !== undefined
+    const isBlocked = !isTaking && (blockingPiece !== undefined || isBlockedDiagonal({ x, z }, piece, pieces) || isBlockedStraight({ x, z }, piece, pieces))
     const isDiagonal = Math.abs(Math.abs(piece.x - x) - Math.abs(piece.z - z)) !== 0
     const isStraight = Math.abs(piece.x - x) > 0 && Math.abs(piece.z - z) > 0
     if ((!isDiagonal && !isStraight) || (isDiagonal && isStraight) || isBlocked) return false
@@ -110,6 +143,8 @@ const isValidKingMove = (x: number, z: number, piece: Piece, pieces: Piece[]) =>
     return true
 }
 
+//TODO: check if we're blocked from moving along the lines (all except pawn, knight and king) by any piece,
+//      then we can also add castling and en passant
 export const isValidMove = (x: number, z: number, piece: Piece, pieces: Piece[]) => {
     switch (piece.piece) {
         case pieceCodes.pawn:
