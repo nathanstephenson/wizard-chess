@@ -6,10 +6,10 @@ import { useEffect, useState } from "react"
 import { createContext, useContext } from "react"
 import { MathUtils } from "three"
 import { OrbitControls } from "three-stdlib"
-import { generateInitialPieces, getLatestPieceState, isValidMove } from "@/common/pieces"
+import { buildInitialPieceState, capture, defaultPieces, getLatestPieceState, move } from "@/common/advanced-pieces"
 import { useApi } from "@/hooks/useApi"
-import { Piece } from "@/types/piece"
-import { GameState } from "../types/game-state"
+import { AdvancedPieceState, Piece, TileCoord } from "@/types/piece"
+import { GameState, NewGameState } from "../types/game-state"
 import { Overlay } from "./overlay"
 import { RenderGame } from "./render-game"
 
@@ -18,11 +18,11 @@ type GameProps = {
 }
 
 type GameContext = {
-    state: GameState
-    pieces: Piece[]
+    state: NewGameState
+    pieces: AdvancedPieceState[]
     tile: {
-        selected: Piece | undefined
-        onClick: (tile: [number, number]) => void
+        selected: AdvancedPieceState | undefined
+        onClick: (tile: TileCoord) => void
     }
     camera: {
         set: (camera: OrbitControls | undefined) => void
@@ -52,27 +52,29 @@ const Game = ({ game }: GameProps) => {
 
     useEffect(resetCamera, [camera])
 
-    const initialPieces = generateInitialPieces(game.boardSize)
+    const initialPieces = buildInitialPieceState(defaultPieces, game.boardSize)
     const [moves, setMoves] = useState<GameState["history"]>(game.history)
     const currentState = getLatestPieceState(initialPieces, moves)
 
-    const [selected, setSelected] = useState<Piece>()
+    const [selected, setSelected] = useState<AdvancedPieceState>()
     console.log("selected", selected)
 
     const addMove = (move: Piece) => setMoves(moves => [...moves, move])
     const translatedMoves = moves.map(move => move.piece + String.fromCharCode(97 + move.x) + (move.z + 1))
     console.log("translatedMoves", translatedMoves)
 
-    const onClick = (tile: [number, number]) => {
+    const onClick = (tile: TileCoord) => {
         if (selected !== undefined) {
-            const validMove = isValidMove(tile[0], tile[1], selected, currentState)
-            if (validMove) {
-                moveMutation.mutate({ ...selected, x: tile[0], z: tile[1], took: typeof validMove === "boolean" ? undefined : validMove })
+            const validationParams = { to: tile, from: selected.position, boardSize: game.boardSize, pieces: defaultPieces, piecesState: currentState }
+            const validMove = move(validationParams)
+            const validTake = capture(validationParams)
+            if (validMove || validTake !== undefined) {
+                moveMutation.mutate({ ...selected, ...tile, took: validTake })
             }
             setSelected(undefined)
             return
         }
-        const piece = currentState.find(piece => piece.x === tile[0] && piece.z === tile[1])
+        const piece = currentState.find(piece => piece.position.x === tile.x && piece.position.z === tile.z)
         if (piece === undefined) {
             setSelected(undefined)
             return

@@ -1,4 +1,10 @@
-import { AdvancedPiece, AdvancedPieceState, TileCoord } from "@/types/piece"
+import { NewGameState } from "@/types/game-state"
+import { AdvancedPiece, AdvancedPieceState, PieceId, TileCoord } from "@/types/piece"
+
+const colour = {
+    white: "white",
+    black: "black"
+} as const
 
 const getPieceOnSquare = (to: TileCoord, pieces: AdvancedPieceState[]) => {
     return pieces.find(p => p.position.x === to.x && p.position.z === to.z)
@@ -65,7 +71,12 @@ const validationBase = ({ boardSize, from, to, pieces, piecesState }: Validation
 export const move = (params: ValidationParams) => {
     const piece = validationBase(params)
     if (piece === undefined) return false
-    const canMove = params.pieces.find(p => p.code === piece.piece)?.canMoveToSquare({ piece, to: params.to }) ?? false
+    const pieceInfo = params.pieces.find(p => p.code === piece.piece)
+    if (pieceInfo === undefined) return false
+    const canMove = pieceInfo.canMoveToSquare({
+        piece: piece.colour === colour.white ? piece : { ...piece, position: { x: piece.position.x, z: params.boardSize - piece.position.z } },
+        to: piece.colour === colour.white ? params.to : { x: params.to.x, z: params.boardSize - params.to.z }
+    })
     return canMove && getPieceOnSquare(params.to, params.piecesState) === undefined
 }
 
@@ -89,8 +100,11 @@ export const defaultPieces: AdvancedPiece[] = [
         movesDiagonal: false,
         takesSameAsMove: false,
         canMoveToSquare: ({ to, piece }) => {
-            if (piece.moveCount > 0 && Math.abs(to.z - piece.position.z) > 1) return false
+            const zD = Math.abs(to.z - piece.position.z)
+            if (piece.moveCount > 0 && zD > 1) return false
+            if (zD > 2) return false
             if (Math.abs(to.x - piece.position.x) > 0) return false
+            if (to.z - piece.position.z <= 0) return false
             return true
         },
         canTakeFromSquare: ({ piece, to }) => {
@@ -170,22 +184,43 @@ export const defaultPieces: AdvancedPiece[] = [
     }
 ]
 
-const colour = {
-    white: "white",
-    black: "black"
-} as const
 export const buildInitialPieceState = (pieces: AdvancedPiece[], boardSize: number): AdvancedPieceState[] =>
     pieces
         .map(piece =>
             (piece.xOffsets === "row"
-                ? [...(boardSize % 2 === 0 ? [] : [0]), ...Array.from({ length: Math.floor(boardSize / 2) }, (_, i) => [i + 1, -(i + 1)]).flat()]
+                ? [
+                      ...(boardSize % 2 === 0 ? [] : [0]),
+                      ...Array.from({ length: Math.floor(boardSize / 2) }, (_, i) => [i + 1 + (boardSize % 2), -(i + 1 + (boardSize % 2))]).flat()
+                  ]
                 : piece.xOffsets
             )
                 .sort((a, b) => a - b)
+                .map(x => x + Math.floor(boardSize / 2) - (x > 0 ? 1 : 0))
                 .map((x, i) => [
-                    { piece: piece.code, index: i, colour: colour.white, position: { x: x + boardSize / 2, z: piece.zOffset }, moveCount: 0 },
-                    { piece: piece.code, index: i, colour: colour.black, position: { x: (x + boardSize / 2) * -1, z: boardSize - piece.zOffset }, moveCount: 0 }
+                    { piece: piece.code, index: i, colour: colour.white, position: { x: x, z: piece.zOffset }, moveCount: 0 },
+                    {
+                        piece: piece.code,
+                        index: i,
+                        colour: colour.black,
+                        position: { x: boardSize - 1 - x, z: boardSize - 1 - piece.zOffset },
+                        moveCount: 0
+                    }
                 ])
                 .flat()
         )
         .flat()
+
+const isMatchingPiece = (a: PieceId, b: PieceId) => a.piece === b.piece && a.colour === b.colour && a.index === b.index
+export const getLatestPieceState = (pieces: AdvancedPieceState[], moves: NewGameState["history"]): AdvancedPieceState[] =>
+    pieces
+        .map(piece => {
+            const takenMove = moves.find(move => move.took !== undefined && isMatchingPiece(move.took, piece))
+            if (takenMove !== undefined) return undefined
+            const lastMove = moves
+                .filter(move => isMatchingPiece(move, piece))
+                .sort((a, b) => a.moveCount - b.moveCount)
+                .at(-1)
+            if (lastMove === undefined) return piece
+            return { ...piece, position: { x: lastMove.x, z: lastMove.z }, moveCount: lastMove.moveCount }
+        })
+        .filter(p => p !== undefined)
