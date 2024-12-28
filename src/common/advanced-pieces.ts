@@ -16,37 +16,43 @@ const getTakingPiece = (to: TileCoord, piece: AdvancedPieceState, pieces: Advanc
     return targetPiece
 }
 
-const getStraightBlockingPiece = (from: TileCoord, to: TileCoord, pieces: AdvancedPieceState[]) => {
-    const xD = from.x - to.x
+const isBlockedStraight = (piece: AdvancedPieceState, to: TileCoord, pieces: AdvancedPieceState[]) => {
+    const xD = to.x - piece.position.x
     const absXd = Math.abs(xD)
-    const zD = from.z - to.z
+    const zD = to.z - piece.position.z
     const absZd = Math.abs(zD)
-    if (absXd > 0 && absZd > 0) return undefined
+    if (absXd > 0 && absZd > 0) return true
     const direction = absXd > absZd ? "x" : "z"
     const max = direction === "x" ? xD : zD
     const maxD = max > 0 ? 1 : -1
-    for (let i = 1; i < Math.abs(max); max > 0 ? i++ : i--) {
-        const x = direction === "x" ? from.x + i * maxD : from.x
-        const z = direction === "z" ? from.z + i * maxD : from.z
+    let hasBeenBlocked = false
+    for (let i = 1; i < Math.abs(max); i++) {
+        const x = direction === "x" ? piece.position.x + i * maxD : piece.position.x
+        const z = direction === "z" ? piece.position.z + i * maxD : piece.position.z
         const blocking = pieces.find(p => p.position.x === x && p.position.z === z)
-        if (blocking !== undefined) return blocking
+        if (blocking !== undefined && blocking.colour !== piece.colour && !hasBeenBlocked) hasBeenBlocked = true
+        if (blocking !== undefined && (hasBeenBlocked || blocking.colour === piece.colour)) return true
     }
+    return false
 }
 
-const getDiagonalBlockingPiece = (from: TileCoord, to: TileCoord, pieces: AdvancedPieceState[]) => {
-    const xD = from.x - to.x
+const isBlockedDiagonal = (piece: AdvancedPieceState, to: TileCoord, pieces: AdvancedPieceState[]) => {
+    const xD = to.x - piece.position.x
     const absXd = Math.abs(xD)
     const xDir = xD > 0 ? 1 : -1
-    const zD = from.z - to.z
+    const zD = to.z - piece.position.z
     const absZd = Math.abs(zD)
     const zDir = zD > 0 ? 1 : -1
-    if (absXd !== absZd) return undefined
+    if (absXd !== absZd) return true
+    let hasBeenBlocked = false
     for (let i = 1; i < absXd; i++) {
-        const x = from.x + i * xDir
-        const z = from.z + i * zDir
+        const x = piece.position.x + i * xDir
+        const z = piece.position.z + i * zDir
         const blocking = pieces.find(p => p.position.x === x && p.position.z === z)
-        if (blocking !== undefined) return blocking
+        if (blocking !== undefined && blocking.colour !== piece.colour && !hasBeenBlocked) hasBeenBlocked = true
+        if (blocking !== undefined && (hasBeenBlocked || blocking.colour === piece.colour)) return true
     }
+    return false
 }
 
 type ValidationParams = {
@@ -59,24 +65,28 @@ type ValidationParams = {
 
 const validationBase = ({ boardSize, from, to, pieces, piecesState }: ValidationParams) => {
     if (to.x > boardSize || to.z > boardSize || to.x < 0 || to.z < 0) return undefined
-    const piece = piecesState.find(p => p.position.x === from.x && p.position.z === from.z && p.piece === "P")
+    const piece = piecesState.find(p => p.position.x === from.x && p.position.z === from.z)
     if (piece === undefined) return undefined
     const pieceInfo = pieces.find(p => p.code === piece.piece)
     if (pieceInfo === undefined) return undefined
-    if (pieceInfo.movesStraight && getStraightBlockingPiece(from, to, piecesState) !== undefined) return undefined
-    if (pieceInfo.movesDiagonal && getDiagonalBlockingPiece(from, to, piecesState) !== undefined) return undefined
+    if (!pieceInfo.movesDiagonal && pieceInfo.movesStraight && isBlockedStraight(piece, to, piecesState)) return undefined
+    if (!pieceInfo.movesStraight && pieceInfo.movesDiagonal && isBlockedDiagonal(piece, to, piecesState)) return undefined
+    if (pieceInfo.movesStraight && isBlockedStraight(piece, to, piecesState) && pieceInfo.movesDiagonal && isBlockedDiagonal(piece, to, piecesState))
+        return undefined
     return piece
 }
+
+const getCorrectPosition = (piece: AdvancedPieceState, to: TileCoord, boardSize: number) => ({
+    piece: piece.colour === colour.white ? piece : { ...piece, position: { ...piece.position, z: boardSize - piece.position.z } },
+    to: piece.colour === colour.white ? to : { ...to, z: boardSize - to.z }
+})
 
 export const move = (params: ValidationParams) => {
     const piece = validationBase(params)
     if (piece === undefined) return false
     const pieceInfo = params.pieces.find(p => p.code === piece.piece)
     if (pieceInfo === undefined) return false
-    const canMove = pieceInfo.canMoveToSquare({
-        piece: piece.colour === colour.white ? piece : { ...piece, position: { x: piece.position.x, z: params.boardSize - piece.position.z } },
-        to: piece.colour === colour.white ? params.to : { x: params.to.x, z: params.boardSize - params.to.z }
-    })
+    const canMove = pieceInfo.canMoveToSquare(getCorrectPosition(piece, params.to, params.boardSize))
     return canMove && getPieceOnSquare(params.to, params.piecesState) === undefined
 }
 
@@ -84,8 +94,10 @@ export const capture = (params: ValidationParams) => {
     const piece = validationBase(params)
     if (piece === undefined) return undefined
     const pieceInfo = params.pieces.find(p => p.code === piece.piece)
-    const canCapture =
-        (pieceInfo?.takesSameAsMove ? pieceInfo?.canMoveToSquare({ piece, to: params.to }) : pieceInfo?.canTakeFromSquare({ piece, to: params.to })) ?? false
+    if (pieceInfo === undefined) return undefined
+    const canCapture = pieceInfo.takesSameAsMove
+        ? pieceInfo.canMoveToSquare(getCorrectPosition(piece, params.to, params.boardSize))
+        : pieceInfo.canTakeFromSquare(getCorrectPosition(piece, params.to, params.boardSize))
     return canCapture ? getTakingPiece(params.to, piece, params.piecesState) : undefined
 }
 
@@ -95,7 +107,6 @@ export const defaultPieces: AdvancedPiece[] = [
         code: "P",
         zOffset: 1,
         xOffsets: "row",
-        canJump: false,
         movesStraight: false,
         movesDiagonal: false,
         takesSameAsMove: false,
@@ -116,7 +127,6 @@ export const defaultPieces: AdvancedPiece[] = [
         code: "K",
         zOffset: 0,
         xOffsets: [1],
-        canJump: false,
         movesStraight: false,
         movesDiagonal: false,
         takesSameAsMove: true,
@@ -129,14 +139,13 @@ export const defaultPieces: AdvancedPiece[] = [
         code: "Q",
         zOffset: 0,
         xOffsets: [-1],
-        canJump: false,
         movesStraight: true,
         movesDiagonal: true,
         takesSameAsMove: true,
         canMoveToSquare: ({ piece, to }) => {
             const zD = Math.abs(to.z - piece.position.z)
             const xD = Math.abs(to.x - piece.position.x)
-            return !(xD > 0 && zD > 0 && xD !== zD)
+            return (xD > 0 && zD === 0) || (zD > 0 && xD === 0) || xD === zD
         }
     },
     {
@@ -144,7 +153,6 @@ export const defaultPieces: AdvancedPiece[] = [
         code: "B",
         zOffset: 0,
         xOffsets: [2, -2],
-        canJump: false,
         movesStraight: false,
         movesDiagonal: true,
         takesSameAsMove: true,
@@ -157,7 +165,6 @@ export const defaultPieces: AdvancedPiece[] = [
         code: "N",
         zOffset: 0,
         xOffsets: [3, -3],
-        canJump: true,
         movesStraight: false,
         movesDiagonal: false,
         takesSameAsMove: true,
@@ -172,14 +179,13 @@ export const defaultPieces: AdvancedPiece[] = [
         code: "R",
         zOffset: 0,
         xOffsets: [4, -4],
-        canJump: false,
         movesStraight: true,
         movesDiagonal: false,
         takesSameAsMove: true,
         canMoveToSquare: ({ piece, to }) => {
             const zD = Math.abs(to.z - piece.position.z)
             const xD = Math.abs(to.x - piece.position.x)
-            return !(xD > 1 && zD > 1)
+            return !(xD > 0 && zD > 0)
         }
     }
 ]

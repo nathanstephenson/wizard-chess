@@ -41,7 +41,6 @@ export const AdvancedPieceSchema = z
         code: PieceCode,
         zOffset: z.number().default(0),
         xOffsets: z.array(z.number()).default([]).or(z.literal("row")),
-        canJump: z.boolean(),
         movesStraight: z.boolean().default(false),
         movesDiagonal: z.boolean().default(false),
         canMoveToSquare: z.function(z.tuple([CanMoveParamsSchema]), z.boolean())
